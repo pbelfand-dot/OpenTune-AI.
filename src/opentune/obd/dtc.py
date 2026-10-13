@@ -22,11 +22,23 @@ _DTC_RE = re.compile(r"^[PCBU][0-3][0-9A-F]{3}$")
 
 # Generic SAE J2012 descriptions (wording varies slightly between revisions).
 DESCRIPTIONS: dict[str, str] = {
+    "P0016": "Crankshaft Position - Camshaft Position Correlation (Bank 1 Sensor A)",
     "P0101": "Mass or Volume Air Flow Sensor \"A\" Circuit Range/Performance",
+    "P0107": "Manifold Absolute Pressure/Barometric Pressure Circuit Low",
+    "P0108": "Manifold Absolute Pressure/Barometric Pressure Circuit High",
+    "P0112": "Intake Air Temperature Sensor 1 Circuit Low",
+    "P0113": "Intake Air Temperature Sensor 1 Circuit High",
+    "P0117": "Engine Coolant Temperature Sensor 1 Circuit Low",
+    "P0118": "Engine Coolant Temperature Sensor 1 Circuit High",
+    "P0122": "Throttle/Pedal Position Sensor/Switch \"A\" Circuit Low",
+    "P0123": "Throttle/Pedal Position Sensor/Switch \"A\" Circuit High",
     "P0128": "Coolant Thermostat (Coolant Temperature Below Thermostat Regulating Temperature)",
     "P0171": "System Too Lean (Bank 1)",
     "P0172": "System Too Rich (Bank 1)",
+    "P0131": "O2 Sensor Circuit Low Voltage (Bank 1, Sensor 1)",
+    "P0132": "O2 Sensor Circuit High Voltage (Bank 1, Sensor 1)",
     "P0217": "Engine Coolant Over Temperature Condition",
+    "P0219": "Engine Overspeed Condition",
     "P0234": "Turbocharger/Supercharger \"A\" Overboost Condition",
     "P0299": "Turbocharger/Supercharger \"A\" Underboost Condition",
     "P0300": "Random/Multiple Cylinder Misfire Detected",
@@ -37,13 +49,17 @@ DESCRIPTIONS: dict[str, str] = {
     "P0305": "Cylinder 5 Misfire Detected",
     "P0306": "Cylinder 6 Misfire Detected",
     "P0325": "Knock Sensor 1 Circuit (Bank 1 or Single Sensor)",
+    "P0327": "Knock Sensor 1 Circuit Low (Bank 1 or Single Sensor)",
+    "P0328": "Knock Sensor 1 Circuit High (Bank 1 or Single Sensor)",
     "P0335": "Crankshaft Position Sensor \"A\" Circuit",
+    "P0340": "Camshaft Position Sensor \"A\" Circuit (Bank 1 or Single Sensor)",
     "P0420": "Catalyst System Efficiency Below Threshold (Bank 1)",
     "P0430": "Catalyst System Efficiency Below Threshold (Bank 2)",
     "P0507": "Idle Air Control System RPM Higher Than Expected",
     "P0562": "System Voltage Low",
     "P0563": "System Voltage High",
     "P0601": "Internal Control Module Memory Check Sum Error",
+    "P0606": "Control Module Processor",
 }
 
 

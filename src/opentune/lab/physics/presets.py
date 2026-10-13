@@ -91,7 +91,7 @@ def b48_inspired() -> EngineConfig:
     tc = cfg.turbo
     tc.compressor_diameter = 0.044
     tc.turbine_diameter = 0.040
-    tc.turbine_area = 0.32e-3
+    tc.turbine_area = 0.29e-3
     tc.wastegate_area_max = 1.2e-3
     tc.inertia = 1.8e-5
     cfg.intake.throttle_diameter = 0.068

@@ -43,6 +43,7 @@ from opentune.lab.physics.constants import (
 
 TWO_PI = 2.0 * math.pi
 RHO_REF = STANDARD_PRESSURE / (R_AIR * STANDARD_TEMPERATURE)
+LAMBDA_NO_FUEL = 9.99  # reported λ when no fuel is injected (air only); keeps outputs finite
 PI_LIN = 0.985  # flow-function linearisation threshold (avoids infinite slope at Π→1)
 
 
@@ -227,6 +228,25 @@ class _AirPath:
 
 
 @dataclass
+class CombustionTerms:
+    """Cycle-averaged combustion results for one operating condition."""
+
+    combusting: bool
+    lambda_value: float
+    relative_load: float
+    burn_duration: float
+    mbt: float
+    knock_limit: float
+    eta_spark: float
+    eta_lambda: float
+    eta_indicated: float
+    q_released: float  # J per cycle (whole engine)
+    imep: float  # Pa
+    t_exhaust: float  # K
+    wall_fraction: float
+
+
+@dataclass
 class EnginePlant:
     config: EngineConfig
     ambient: Ambient = field(default_factory=Ambient)
@@ -385,6 +405,42 @@ class EnginePlant:
             p = p_new
         return p
 
+    def dilution_efficiency(self, p_im: float, p_em: float) -> float:
+        """Efficiency penalty from residual-gas dilution at low manifold pressure (heuristic).
+
+        Throttled operation (p_em ≫ p_im) traps more hot residual gas, slowing combustion
+        and increasing cycle-to-cycle losses; modelled as a linear penalty in p_em/p_im.
+        """
+        ratio = p_em / max(p_im, 1000.0)
+        return _clamp(1.0 - self.config.combustion.dilution_coeff * max(0.0, ratio - 1.0), 0.6, 1.0)
+
+    def combustion_terms(self, rpm: float, p_im: float, t_im: float, t_coolant: float, air_per_cycle: float,
+                         fuel_per_cycle: float, spark: float, fuel_enable: bool = True,
+                         ignition_on: bool = True, p_em: float | None = None) -> CombustionTerms:
+        if p_em is None:
+            p_em = self.state.p_em
+        comb = self.config.combustion
+        afr_s = self.fuel.stoich_afr
+        lam = air_per_cycle / (fuel_per_cycle * afr_s) if fuel_per_cycle > 0.0 else float("inf")
+        rel_load = air_per_cycle / (RHO_REF * self.vd) if self.vd > 0 else 0.0
+        combusting = (fuel_enable and ignition_on and fuel_per_cycle > 0.0 and rpm > 60.0
+                      and 0.55 < lam < comb.lean_limit_lambda)
+        burn = self.burn_duration(rpm, rel_load)
+        mbt = self.mbt_advance(rpm, rel_load)
+        knock_lim = self.knock_limit(rpm, p_im, t_im, t_coolant, lam if math.isfinite(lam) else 1.0)
+        x_wall = self.wall_heat_fraction(rpm)
+        if not combusting:
+            return CombustionTerms(False, lam, rel_load, burn, mbt, knock_lim, 0.0, 0.0, 0.0, 0.0, 0.0, t_im, x_wall)
+        eta_spark = max(0.0, 1.0 - comb.spark_efficiency_coeff * (spark - mbt) ** 2)
+        eta_lam = lambda_efficiency(lam)
+        eta_ind = self.eta_otto * comb.eta_ig_ch * eta_spark * eta_lam * self.dilution_efficiency(p_im, p_em)
+        q = fuel_per_cycle * self.fuel.lower_heating_value * min(1.0, lam) * comb.combustion_efficiency
+        imep = q * eta_ind / self.vd
+        q_exh = (q - q * eta_ind) * (1.0 - x_wall)
+        t_em = t_im + q_exh / ((air_per_cycle + fuel_per_cycle) * CP_EXHAUST) if air_per_cycle > 0.0 else t_im
+        return CombustionTerms(True, lam, rel_load, burn, mbt, knock_lim, eta_spark, eta_lam, eta_ind, q, imep, t_em,
+                               x_wall)
+
     # ------------------------------------------------------------------ air path
     def _air_path(self, st: PlantState, p_boost: float, p_im: float, rpm: float, n: float) -> _AirPath:
         cfg = self.config
@@ -501,39 +557,21 @@ class EnginePlant:
         fuel_per_inj = q_inj * max(0.0, inputs.injector_pw - dead) if inputs.fuel_enable else 0.0
         fuel_per_cycle = fuel_per_inj * self.n_cyl
         m_fuel = fuel_per_cycle * n / 2.0
-        afr_s = self.fuel.stoich_afr
-        lam = air_per_cycle / (fuel_per_cycle * afr_s) if fuel_per_cycle > 0.0 else float("inf")
-        rel_load = air_per_cycle / (RHO_REF * self.vd) if self.vd > 0 else 0.0
-        combusting = (inputs.fuel_enable and inputs.ignition_on and fuel_per_cycle > 0.0 and rpm > 60.0
-                      and 0.55 < lam < comb.lean_limit_lambda)
-
-        spark = inputs.spark_advance
-        burn = self.burn_duration(rpm, rel_load)
-        mbt = self.mbt_advance(rpm, rel_load)
-        lam_eff = lam if math.isfinite(lam) else 1.0
-        knock_lim = self.knock_limit(rpm, st.p_im, t_im, st.t_coolant, lam_eff)
+        ct = self.combustion_terms(rpm, st.p_im, t_im, st.t_coolant, air_per_cycle, fuel_per_cycle,
+                                   inputs.spark_advance, inputs.fuel_enable, inputs.ignition_on)
+        lam, rel_load, combusting = ct.lambda_value, ct.relative_load, ct.combusting
+        spark, burn, mbt, knock_lim = inputs.spark_advance, ct.burn_duration, ct.mbt, ct.knock_limit
+        eta_spark, eta_lam, eta_ind, imep, q_released = (ct.eta_spark, ct.eta_lambda, ct.eta_indicated,
+                                                         ct.imep, ct.q_released)
         knock = 0.0
-        eta_spark = eta_lam = eta_ind = 0.0
-        imep = 0.0
-        q_released = 0.0
-        if combusting:
-            eta_spark = max(0.0, 1.0 - comb.spark_efficiency_coeff * (spark - mbt) ** 2)
-            eta_lam = lambda_efficiency(lam)
-            eta_ind = self.eta_otto * comb.eta_ig_ch * eta_spark * eta_lam
-            q_released = fuel_per_cycle * self.fuel.lower_heating_value * min(1.0, lam) * comb.combustion_efficiency
-            imep = q_released * eta_ind / self.vd
-            if spark > knock_lim:
-                knock = (spark - knock_lim) * comb.knock_intensity_gain * (0.85 + 0.3 * self.rng.random())
+        if combusting and spark > knock_lim:
+            knock = (spark - knock_lim) * comb.knock_intensity_gain * (0.85 + 0.3 * self.rng.random())
         w_ig = imep * self.vd
 
         # --- exhaust side
         m_e = m_cyl + m_fuel
-        x_wall = self.wall_heat_fraction(rpm)
-        if combusting and air_per_cycle > 0.0:
-            q_exh = (q_released - w_ig) * (1.0 - x_wall)
-            t_em = t_im + q_exh / ((air_per_cycle + fuel_per_cycle) * CP_EXHAUST)
-        else:
-            t_em = t_im
+        x_wall = ct.wall_fraction
+        t_em = ct.t_exhaust
         p_out = amb.pressure + cfg.exhaust.backpressure_coeff * m_e * m_e
         m_t = m_wg = p_t = eta_t = 0.0
         if cfg.turbo.enabled:
@@ -608,7 +646,8 @@ class EnginePlant:
             t_coolant=st.t_coolant, t_oil=st.t_oil, t_charge_loop=st.t_charge_loop,
             m_compressor=ap.m_c, m_throttle=ap.m_th, m_cylinder=m_cyl, m_fuel=m_fuel, m_wastegate=m_wg,
             m_turbine=m_t, air_per_cycle=air_per_cycle, fuel_per_cycle=fuel_per_cycle, relative_load=rel_load,
-            volumetric_efficiency=ap.ve, lambda_value=lam, combusting=combusting, spark_advance=spark,
+            volumetric_efficiency=ap.ve, lambda_value=min(lam, LAMBDA_NO_FUEL), combusting=combusting,
+            spark_advance=spark,
             mbt_advance=mbt, knock_limit_advance=knock_lim, knock_intensity=knock, burn_duration_deg=burn,
             eta_spark=eta_spark, eta_lambda=eta_lam, eta_indicated=eta_ind, imep=imep, pmep=pmep, fmep=fmep,
             bmep=bmep, indicated_torque=indicated_torque, brake_torque=brake_torque, load_torque=load_torque,

@@ -117,6 +117,7 @@ class Combustion:
     wiebe_a: float = 5.0
     wiebe_m: float = 2.0
     lean_limit_lambda: float = 1.45
+    dilution_coeff: float = 0.035  # indicated-efficiency loss per unit (p_em/p_im − 1)
     knock_base_deg: float = 22.0  # knock-limited advance at 1 bar MAP, 2000 rpm, 40 °C, 91 AKI
     knock_octane_coeff: float = 1.2  # deg per AKI
     knock_pressure_coeff: float = 6.5  # deg per bar of manifold pressure above 1 bar
@@ -138,10 +139,10 @@ class Friction:
 
 @dataclass
 class Thermal:
-    coolant_capacity: float = 60000.0  # J/K
+    coolant_capacity: float = 90000.0  # J/K
     oil_capacity: float = 18000.0  # J/K
-    radiator_ua: float = 900.0  # W/K at full airflow, thermostat open
-    radiator_ua_still: float = 250.0  # W/K at zero airflow (fan)
+    radiator_ua: float = 2600.0  # W/K at full airflow, thermostat open
+    radiator_ua_still: float = 700.0  # W/K at zero airflow (fan)
     thermostat_open_c: float = 95.0
     thermostat_full_c: float = 105.0
     wall_heat_fraction: float = 0.50  # share of unconverted fuel energy lost to walls (at 2000 rpm)
@@ -398,6 +399,8 @@ PARAM_SPECS: dict[str, ParamSpec] = {s.path: s for s in (
     _spec("combustion.wiebe_a", "Wiebe a", "", 1, 2, 10, "Wiebe efficiency parameter"),
     _spec("combustion.wiebe_m", "Wiebe m", "", 1, 0.5, 5, "Wiebe form factor"),
     _spec("combustion.lean_limit_lambda", "Lean limit", "λ", 1, 1.1, 2.0, "Lean misfire limit"),
+    _spec("combustion.dilution_coeff", "Residual-gas dilution penalty", "", 1, 0.0, 0.2,
+          "Indicated-efficiency loss per unit of (p_em/p_im − 1) at throttled conditions (heuristic)"),
     _spec("combustion.knock_base_deg", "Knock limit base", "° BTDC", 1, 0, 50,
           "Knock-limited spark advance at 1 bar, 2000 rpm, 40 °C IAT, 91 AKI"),
     _spec("combustion.knock_octane_coeff", "Knock limit per octane", "°/AKI", 1, 0, 5, "Higher octane → more advance"),
