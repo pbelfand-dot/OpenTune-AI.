@@ -54,6 +54,7 @@ dev = [
 
 [project.scripts]
 opentune = "opentune.cli:main"
+opentune-lab = "opentune.lab.cli:main"
 
 [project.gui-scripts]
 opentune-gui = "opentune.gui.app:main"
@@ -64,9 +65,13 @@ version = { attr = "opentune.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"opentune.lab.web" = ["dist/*", "dist/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 qt_api = "pyside6"
 
 [tool.ruff]

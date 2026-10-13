@@ -138,6 +138,23 @@ class CalibrationStore:
                              (engine_id,)).fetchone()
         return self._info(row) if row else None
 
+    def set_baseline_for_lineage(self, version_id: str) -> None:
+        """Mark one version as the baseline of its lineage (projects keep separate baselines)."""
+        info = self.info(version_id)
+        with self._lock, self._connect() as db:
+            db.execute("UPDATE calibration_versions SET is_baseline=0 WHERE lineage=?", (info.lineage,))
+            db.execute("UPDATE calibration_versions SET is_baseline=1 WHERE id=?", (version_id,))
+
+    def lineage_baseline(self, lineage: str) -> VersionInfo | None:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM calibration_versions WHERE lineage=? AND is_baseline=1",
+                             (lineage,)).fetchone()
+        return self._info(row) if row else None
+
+    def delete_lineage(self, lineage: str) -> None:
+        with self._lock, self._connect() as db:
+            db.execute("DELETE FROM calibration_versions WHERE lineage=?", (lineage,))
+
     def delete(self, version_id: str) -> None:
         with self._lock, self._connect() as db:
             children = db.execute("SELECT COUNT(*) FROM calibration_versions WHERE parent_id=?",
