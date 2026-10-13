@@ -102,6 +102,9 @@ class VirtualEcu:
         self.run_time = 0.0
         self._last_rpm = 0.0
         self._crank_lost = False
+        # Simulated "actuator test" overrides for the control lab (e.g. open-loop wastegate steps).
+        # Keys: throttle_cmd, wastegate_cmd, spark_advance. Only exists on the virtual ECU.
+        self.actuator_overrides: dict[str, float] = {}
         self.last = EcuOutputs()
         self.reload_calibration(calibration)
 
@@ -440,7 +443,8 @@ class VirtualEcu:
         self._monitor("P0234", overboost, dt, frame, confirm_s=0.0)
         if overboost:
             self.overboost_lockout = 5.0
-        self._monitor("P0299", rpm > s("underboost_enable_rpm") and boost_target > baro_kpa + 30.0
+        self._monitor("P0299", not self.actuator_overrides and rpm > s("underboost_enable_rpm")
+                      and boost_target > baro_kpa + 30.0
                       and boost_kpa < boost_target - 30.0 and wastegate <= 1.0, dt, frame, confirm_s=5.0,
                       pending_s=2.5)
 
@@ -558,6 +562,11 @@ class VirtualEcu:
         return out
 
     def _finish(self, out: EcuOutputs, protections: list[str], frame: dict, limp: bool) -> None:
+        if self.actuator_overrides and out.state == "RUNNING":
+            for key, value in self.actuator_overrides.items():
+                if key in ("throttle_cmd", "wastegate_cmd", "spark_advance"):
+                    setattr(out, key, float(value))
+            protections.append("actuator_test")
         out.protections = protections
         out.limp = limp
         out.dtcs = sorted(self.dtcs)

@@ -108,3 +108,20 @@ class VehicleLoad(Load):
 
     def to_dict(self) -> dict:
         return {"kind": self.kind, "gear_ratio": self.gear_ratio, "speed_kmh": self.speed_ms * 3.6}
+
+
+@dataclass
+class TorqueStepLoad(Load):
+    """Engine in neutral plus an accessory-style load torque switched on at ``t_on`` (seconds of load time)."""
+
+    step_nm: float = 20.0
+    t_on: float = 1.0
+    elapsed: float = 0.0
+    kind = "torque_step"
+
+    def torque(self, out, omega, dt):
+        self.elapsed += dt
+        return self.step_nm if self.elapsed >= self.t_on and omega > 1.0 else 0.0
+
+    def to_dict(self) -> dict:
+        return {"kind": self.kind, "step_nm": self.step_nm, "t_on": self.t_on}

@@ -258,6 +258,7 @@ class VirtualEcuDevice:
             self.banks[bank][off: off + len(data)] = data
             if self.faults.bitflip_block is not None and block == self.faults.bitflip_block:
                 self.banks[bank][off + len(data) // 2] ^= 0x04  # weak cell: one bit drops after programming
+                self.faults.bitflip_block = None  # one-shot, like the other injected faults
             self._blocks_written += 1
             return L.ST_OK, {"written": len(data)}, b""
         if cmd == L.CMD_VERIFY:

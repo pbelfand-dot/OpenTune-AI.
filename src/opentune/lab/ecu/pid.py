@@ -18,6 +18,7 @@ class PID:
     out_min: float = float("-inf")
     out_max: float = float("inf")
     derivative_tau: float = 0.02
+    anti_windup: bool = True  # False only for control-lab demonstrations of integrator windup
     integrator: float = 0.0
     _prev_measurement: float | None = None
     _d_state: float = 0.0
@@ -44,7 +45,8 @@ class PID:
         self.saturated = out != unsat
         # Conditional integration (anti-windup): skip increments that push further into saturation.
         increment = self.ki * error * dt
-        if not ((out >= self.out_max and increment > 0.0) or (out <= self.out_min and increment < 0.0)):
+        if not self.anti_windup or not ((out >= self.out_max and increment > 0.0)
+                                        or (out <= self.out_min and increment < 0.0)):
             self.integrator += increment
         self.last_output = out
         return out
