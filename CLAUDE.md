@@ -111,7 +111,7 @@ opentune simulate --engine B58 --scenario wot_pull --duration 20
 ```
 
 On Linux CI/cloud machines set `QT_QPA_PLATFORM=offscreen` and install
-`libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3` for Qt.
+`libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3` for Qt.
 
 Conventions: Python ≥ 3.10, `from __future__ import annotations`, dataclasses,
 ruff (line length 100), canonical metric units internally, conversion only at
