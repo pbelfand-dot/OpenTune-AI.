@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opentune-ai"
+dynamic = ["version"]
+description = "Subscription-free BMW diagnostics and ECU tuning development platform (simulation-first)."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "OpenTune AI contributors" }]
+keywords = ["obd2", "bmw", "b58", "b48", "diagnostics", "datalogging", "ecu"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Scientific/Engineering",
+    "Private :: Do Not Upload",
+]
+# The core library (simulation, OBD-II, logging, calibrations, analysis, CLI)
+# has no third-party dependencies. The desktop GUI and real adapters are extras.
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["PySide6-Essentials>=6.6"]
+serial = ["pyserial>=3.5"]
+dev = [
+    "PySide6-Essentials>=6.6",
+    "pyserial>=3.5",
+    "pytest>=7.4",
+    "pytest-qt>=4.2",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+opentune = "opentune.cli:main"
+
+[project.gui-scripts]
+opentune-gui = "opentune.gui.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "opentune.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+qt_api = "pyside6"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]

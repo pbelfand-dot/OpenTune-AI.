@@ -1,0 +1,4 @@
+# Runtime dependencies for the desktop application.
+# The core library and CLI simulation mode need only the Python standard library.
+PySide6-Essentials>=6.6
+pyserial>=3.5
