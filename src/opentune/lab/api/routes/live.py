@@ -56,13 +56,22 @@ def _live(request: Request) -> LiveSession:
 def start(request: Request, body: StartBody) -> dict:
     st = state(request)
     project = st.library.get_project(body.project_id)
-    if body.calibration == "flashed" and project.flashed_version_id:
-        vid, which = project.flashed_version_id, "flashed to virtual ECU"
+    if body.calibration == "flashed":
+        # Run exactly what is in the virtual ECU's memory (decoded from the running bank).
+        from opentune.lab.flash import decode_image
+
+        dev = st.device(project.id)
+        image = dev.running_image() if dev.powered else None
+        if image is None:
+            raise HTTPException(409, "Virtual ECU is in bootloader (recovery) mode — flash a calibration first")
+        cal = decode_image(image)
+        vid = st.version_for_hash(project.id, cal.content_hash())
+        info = st.library.calibrations.info(vid) if vid else None
+        label = f"{cal.name}{f' v{info.version}' if info else ''} (flashed, bank {dev.running_bank})"
     else:
-        vid, which = project.active_version_id, "active version (not flashed)"
-    cal = st.library.calibrations.load(vid)
-    info = st.library.calibrations.info(vid)
-    label = f"{cal.name} v{info.version} ({which})"
+        cal = st.library.calibrations.load(project.active_version_id)
+        info = st.library.calibrations.info(project.active_version_id)
+        label = f"{cal.name} v{info.version} (active version, not flashed)"
     session = LiveSession(project.id, project.engine_config(), cal, label, rate_hz=body.rate_hz, speed=body.speed,
                           warm=body.warm, ambient_temp_c=body.ambient_temp_c,
                           ambient_pressure_kpa=body.ambient_pressure_kpa)

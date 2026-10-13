@@ -6,4 +6,6 @@ from fastapi import APIRouter
 
 
 def routers() -> list[APIRouter]:
-    return []
+    from opentune.lab.api.routes import flash
+
+    return [flash.router]

@@ -36,6 +36,7 @@ def _project_view(request: Request, pid: str) -> dict:
     d["active_version"] = st.library.calibrations.info(p.active_version_id).to_dict()
     d["flashed_version"] = (st.library.calibrations.info(p.flashed_version_id).to_dict()
                             if p.flashed_version_id else None)
+    d["flashed_unknown"] = p.flashed_version_id == ""  # ECU holds content not saved in this project
     d["live"] = bool(st.live and st.live.project_id == pid)
     return d
 
@@ -48,7 +49,9 @@ def list_projects(request: Request) -> list[dict]:
 @router.post("")
 def create_project(request: Request, body: NewProject) -> dict:
     cfg = EngineConfig.from_dict(body.config) if body.config else None
-    p = state(request).library.create_project(body.name, body.preset_id, cfg, body.notes)
+    st = state(request)
+    p = st.library.create_project(body.name, body.preset_id, cfg, body.notes)
+    st.device(p.id)  # factory-program the project's virtual ECU with the baseline
     return _project_view(request, p.id)
 
 
@@ -71,6 +74,10 @@ def delete_project(request: Request, pid: str) -> dict:
         st.replace_live(None)
     st.drop_editor(pid)
     st.library.delete_project(pid)
+    import shutil
+
+    st.device_path(pid).unlink(missing_ok=True)
+    shutil.rmtree(st.backup_dir(pid), ignore_errors=True)
     return {"deleted": pid}
 
 

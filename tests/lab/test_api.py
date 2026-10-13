@@ -67,7 +67,7 @@ def test_engine_validate_and_preview(client):
 
 def test_project_crud(client):
     p = client.post("/api/projects", json={"name": "tmp", "preset_id": "b58-inspired"}).json()
-    assert p["active_version"]["version"] == 1 and p["flashed_version"] is None
+    assert p["active_version"]["version"] == 1 and p["flashed_version"]["version"] == 1  # factory-programmed
     p2 = client.patch(f"/api/projects/{p['id']}", json={"name": "renamed", "notes": "n"}).json()
     assert p2["name"] == "renamed" and p2["notes"] == "n"
     cfg = p2["config"]
@@ -161,7 +161,7 @@ def test_dyno_job_cancel(client, pid):
 
 def test_live_session_controls_and_diagnostics(client, pid):
     st = client.post("/api/live/start", json={"project_id": pid}).json()
-    assert st["state"] == "OFF" and "not flashed" in st["calibration"]
+    assert st["state"] == "OFF" and "flashed, bank A" in st["calibration"]
     client.post("/api/live/control", json={"action": "crank"})
     end = time.time() + 10
     while time.time() < end and client.get("/api/live/status").json()["state"] != "RUNNING":

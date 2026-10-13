@@ -57,6 +57,48 @@ class LabState:
         saved = self.library.calibrations.info(self.editor_version(project_id))
         return editor.calibration.content_hash() != saved.content_hash
 
+    # ------------------------------------------------------------------ virtual ECU devices
+    def device_path(self, project_id: str) -> Path:
+        return self.root / "ecu" / f"{project_id}.json"
+
+    def backup_dir(self, project_id: str) -> Path:
+        return self.root / "ecu" / "backups" / project_id
+
+    def device(self, project_id: str):
+        """The project's virtual ECU (created on first use with the baseline factory-programmed)."""
+        import json
+
+        from opentune.lab.flash import VirtualEcuDevice, build_image
+
+        with self.lock:
+            path = self.device_path(project_id)
+            if path.exists():
+                return VirtualEcuDevice.from_dict(json.loads(path.read_text()))
+            project = self.library.get_project(project_id)
+            info = self.library.calibrations.lineage_baseline(project.calibration_lineage)
+            vid = info.id if info else project.active_version_id
+            dev = VirtualEcuDevice(project.config.get("id", "custom"))
+            dev.factory_program(build_image(self.library.calibrations.load(vid)))
+            self.save_device(project_id, dev)
+            self.library.update_project(project_id, flashed_version_id=vid)
+            return dev
+
+    def save_device(self, project_id: str, dev) -> None:
+        import json
+
+        path = self.device_path(project_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(dev.to_dict()))
+        tmp.replace(path)
+
+    def version_for_hash(self, project_id: str, content_hash: str) -> str | None:
+        project = self.library.get_project(project_id)
+        for v in reversed(self.library.calibrations.history(project.calibration_lineage)):
+            if v.content_hash == content_hash:
+                return v.id
+        return None
+
     # ------------------------------------------------------------------ live session
     def replace_live(self, session: LiveSession | None) -> None:
         with self.lock:
@@ -69,10 +111,10 @@ class LabState:
     def ensure_demo_projects(self) -> None:
         """First start: create one project per preset so the UI has something to show."""
         if not self.library.list_projects():
-            self.library.create_project("B48-inspired (G20 330i-class) demo", "b48-inspired",
-                                        notes="Synthetic model; not BMW factory data.")
-            self.library.create_project("B58-inspired (G20 M340i-class) demo", "b58-inspired",
-                                        notes="Synthetic model; not BMW factory data.")
+            for name, preset in (("B48-inspired (G20 330i-class) demo", "b48-inspired"),
+                                 ("B58-inspired (G20 M340i-class) demo", "b58-inspired")):
+                p = self.library.create_project(name, preset, notes="Synthetic model; not BMW factory data.")
+                self.device(p.id)
 
     def shutdown(self) -> None:
         self.replace_live(None)

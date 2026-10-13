@@ -142,7 +142,7 @@ class ProjectLibrary:
             if problems:
                 raise ValueError("Invalid engine configuration: " + "; ".join(problems[:5]))
         for vid in (active_version_id, flashed_version_id):
-            if vid is not None and self.calibrations.info(vid).lineage != project.calibration_lineage:
+            if vid and self.calibrations.info(vid).lineage != project.calibration_lineage:
                 raise ValueError("Calibration version belongs to another project")
         with self._lock, self._connect() as db:
             db.execute(
