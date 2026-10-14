@@ -49,7 +49,7 @@ def cmd_info(args) -> int:
     from opentune.ecu.safety import REAL_ECU_WRITE_ENABLED
 
     print(f"{__app_name__} {__version__}")
-    print(f"Real ECU writing: {'ENABLED' if REAL_ECU_WRITE_ENABLED else 'DISABLED (hard-coded in v0.1)'}")
+    print(f"Real ECU writing: {'ENABLED' if REAL_ECU_WRITE_ENABLED else 'DISABLED (hard-coded)'}")
     print(f"Data directory:   {_paths(args).root}")
     for profile in ENGINES.values():
         print(f"\n{profile.code} — {profile.family_name}")
