@@ -150,7 +150,7 @@ def cmd_selftest(args) -> int:
         import warnings
 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore")  # starlette TestClient deprecation notice
             from fastapi.testclient import TestClient
 
         from opentune.lab.api.app import create_app

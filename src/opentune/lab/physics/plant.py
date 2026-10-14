@@ -1,6 +1,6 @@
 """Mean-value engine plant model (MVEM).
 
-A cycle-averaged, zero-dimensional model in the tradition of Hendricks (1989) and
+A cycle-averaged, zero-dimensional model in the tradition of Hendricks & Sorenson (SAE 900616) and
 Eriksson & Nielsen (2014): manifolds are filling/emptying control volumes, the
 throttle, turbine and wastegate are compressible-flow restrictions, the
 compressor follows a dimensionless head/flow speed-line, cylinder air flow uses

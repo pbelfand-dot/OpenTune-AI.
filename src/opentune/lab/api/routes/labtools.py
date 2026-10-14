@@ -366,3 +366,84 @@ def rev_sound(cylinders: int = 6, preset: str = "exhaust", redline: float = 6500
         raise HTTPException(400, "cylinders must be 3, 4, 5, 6 or 8")
     t, rpm, load, turbo = rev_trace(redline=min(max(redline, 3000.0), 9000.0))
     return _wav(to_wav(synthesize(t, rpm, load, turbo, cylinders, preset)))
+
+
+# ---------------------------------------------------------------------------------------- integrations
+class RusefiProbeBody(BaseModel):
+    port: int = Field(29001, ge=1024, le=65535)
+    start_simulator_seconds: int = Field(0, ge=0, le=600)
+
+
+class EngineSimBody(BaseModel):
+    seconds: float = Field(5.0, ge=0.5, le=60.0)
+    throttle: float = Field(1.0, ge=0.0, le=1.0)
+    dyno_rpm: float = Field(0.0, ge=0.0, le=12000.0)
+    script: str = "main.mr"
+
+
+@router.get("/api/integrations")
+def integrations() -> list[dict]:
+    from opentune.lab.integrations import integration_status
+
+    return integration_status()
+
+
+@router.post("/api/integrations/rusefi/probe")
+def rusefi_probe(body: RusefiProbeBody) -> dict:
+    """Read signature, version and a few live channels from a local rusEFI simulator (read-only)."""
+    from opentune.lab.integrations import rusefi
+
+    try:
+        if body.start_simulator_seconds:
+            binary = rusefi.simulator_binary()
+            if binary is None:
+                raise HTTPException(409, "OPENTUNE_RUSEFI_SIMULATOR is not set to a rusEFI simulator binary")
+            with rusefi.RusefiSimulatorProcess(binary, body.start_simulator_seconds, body.port), \
+                    rusefi.RusefiTsClient(port=body.port) as client:
+                return client.snapshot().to_dict()
+        with rusefi.RusefiTsClient(port=body.port) as client:
+            return client.snapshot().to_dict()
+    except rusefi.RusefiUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except rusefi.RusefiError as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+
+@router.post("/api/integrations/enginesim/run")
+def enginesim_run(request: Request, body: EngineSimBody) -> dict:
+    """Run engine-sim as an external process (job). Fails clearly if it is not configured."""
+    from opentune.lab.integrations import enginesim
+
+    if not all(enginesim.configured()):
+        raise HTTPException(409, enginesim.status()["detail"])
+    st = state(request)
+
+    def job(progress, cancel):
+        progress(0.1, "engine-sim running")
+        res = enginesim.run(body.seconds, body.throttle, body.dyno_rpm, body.script)
+        out = res.to_dict()
+        if res.wav:
+            path = st.root / "enginesim_last.wav"
+            path.write_bytes(res.wav)
+            out["wav_url"] = "/api/integrations/enginesim/last.wav"
+        return out
+
+    return st.jobs.submit("engine-sim", job).to_dict()
+
+
+@router.get("/api/integrations/enginesim/last.wav")
+def enginesim_wav(request: Request) -> Response:
+    path = state(request).root / "enginesim_last.wav"
+    if not path.exists():
+        raise HTTPException(404, "No engine-sim audio yet")
+    return _wav(path.read_bytes())
+
+
+@router.get("/api/projects/{pid}/calibration/export.m")
+def export_m(request: Request, pid: str) -> Response:
+    from opentune.lab.integrations.matlab import m_script
+
+    cal = state(request).editor(pid).calibration
+    text = m_script(cal, f"{cal.engine_id}_calibration.mat")
+    return Response(content=text, media_type="text/plain",
+                    headers={"Content-Disposition": f'attachment; filename="load_{cal.engine_id.replace("-", "_")}.m"'})
