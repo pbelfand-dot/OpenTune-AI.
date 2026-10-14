@@ -12,6 +12,11 @@ and is written in **Python + PySide6**.
 Version 0.1 is **simulation-first**: every feature works against a built-in engine
 simulator, and **real ECU writing is hard-disabled**.
 
+The Virtual Engine Lab (v0.2) exists **to train, test, validate and continuously improve the
+tuning engine** (`lab/tuning/`) — it is not a game. Keep the simulator integrated with the tuning
+workflow (evaluator battery → actions → response model → session → benchmark), and never treat a
+simulated result as proof that a calibration is safe for a real vehicle.
+
 ## Non-negotiable rules
 
 1. **Never enable real ECU writing.** `opentune/ecu/safety.py` defines
@@ -52,6 +57,14 @@ simulator, and **real ECU writing is hard-disabled**.
     `ready_for_vehicle = False`; candidates are for simulation only.
 11. **Integrations never fake results.** If rusEFI, engine-sim or MATLAB is unavailable, raise
     or report it; never substitute the lab's own model while claiming an external tool ran.
+12. **The tuning engine recommends, it never certifies.** Reports keep `ready_for_vehicle = False`
+    and the disclaimer; a candidate must pass the battery (stress margins, knock, DTCs, protection
+    modes) and the validation battery; an unsafe starting calibration that cannot be repaired yields
+    *no* recommendation. Stress limits are assumptions and must be labelled so. Do not weaken the
+    safety screen, the floors or the validation gate to make benchmark numbers look better; new
+    actions must be bounded, explainable edits of tuning tables (never protection, idle or
+    cold-start functions). `tests/lab/test_tuning.py` checks the tuning package cannot import
+    flashing, programming, OBD or serial code.
 
 ## Architecture
 
@@ -120,16 +133,20 @@ lab/
 ├── optimize/      SLSQP operating-point optimiser + validation gate
 ├── analysis/      AI analyst (evidence-tagged findings, optional local LLM)
 ├── scenarios/     Test Laboratory A–G
+├── tuning/        tuning engine: evaluator (battery, stress limits, scorecard, judge), actions,
+│                  knowledge (response model, SQLite experience store, caution), session (repair,
+│                  search, validation), benchmark (held-out engines, curriculum)
 ├── sound/         illustrative synthesis
 ├── storage/       ProjectLibrary (SQLite)
 ├── integrations/  rusefi (read-only TS client), enginesim (subprocess), matlab (optional)
 ├── api/           FastAPI app, LabState, JobManager, LiveSession (WebSocket), routes/
 ├── web/dist/      built browser UI (committed; source in /web, React + TypeScript + Vite)
-└── cli.py         `opentune-lab serve|presets|simulate|dyno|selftest`
+└── cli.py         `opentune-lab serve|presets|simulate|dyno|tune|train|benchmark|selftest`
 ```
 
 Docs: `docs/ARCHITECTURE.md`, `SIMULATION_MODELS.md`, `MODEL_ASSUMPTIONS.md`,
-`VALIDATION.md`, `LICENSING.md`, `ROADMAP.md`, `LAB_USER_GUIDE.md`, `LAB_INTEGRATIONS.md`.
+`VALIDATION.md`, `LICENSING.md`, `ROADMAP.md`, `LAB_USER_GUIDE.md`, `LAB_INTEGRATIONS.md`,
+`TUNING_ENGINE.md`.
 
 Lab conventions: SI units internally; every model coefficient lives in `EngineConfig` with a
 `ParamSpec`; documented values carry a source in `cfg.provenance`; seeded randomness only;
@@ -148,6 +165,10 @@ results that leave the lab (CSV, reports, API) say they are simulated.
 - **Lab preset / table / scenario / integration:** see the extension table in
   `docs/ARCHITECTURE.md`. New analysis rules go in `lab/analysis/analyst.py` and must tag every
   evidence item with a provenance kind.
+- **Tuning action / goal / stress limit:** actions in `lab/tuning/actions.py` (bounded offsets,
+  plus an engineering-prior rule in `knowledge.engineering_rules`), goals in
+  `evaluator.GOALS`, limits in `evaluator.StressLimits` (+ `STRESS_KEYS`). Prove on both presets
+  that the benchmark has no new constraint surprises (`opentune-lab benchmark --suite quick`).
 - **Browser UI:** edit `web/src`, then `cd web && npm ci && npm run build` and commit
   `src/opentune/lab/web/dist` (CI fails if the bundle is stale).
 - **Future BMW module:** implement `ecu.interface.EcuTarget`, register via

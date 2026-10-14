@@ -4,6 +4,9 @@
     opentune-lab presets                             list engine presets
     opentune-lab simulate --engine b58-inspired      closed-loop run, prints a telemetry table
     opentune-lab dyno --engine b58-inspired --kind sweep --out results/
+    opentune-lab tune --engine b48-inspired --goal midrange_torque --budget 12
+    opentune-lab train --rounds 1                    grow the tuning knowledge base (nominal presets)
+    opentune-lab benchmark --suite quick             score the tuning engine (held-out engines included)
     opentune-lab selftest                            end-to-end check (no network, no display)
 
 Everything here is simulated. Nothing talks to vehicle hardware.
@@ -122,6 +125,85 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def _knowledge(args):
+    from opentune.config import default_data_dir
+    from opentune.lab.tuning.knowledge import KnowledgeBase
+
+    root = Path(args.data_dir) if args.data_dir else default_data_dir()
+    return KnowledgeBase(root / "lab" / "tuning.sqlite")
+
+
+def _progress(fraction: float, message: str) -> None:
+    print(f"  [{fraction * 100:5.1f} %] {message}", flush=True)
+
+
+def cmd_tune(args) -> int:
+    from opentune.lab.calibration.defaults import build_baseline
+    from opentune.lab.calibration.io import import_json
+    from opentune.lab.physics.presets import get_preset
+    from opentune.lab.tuning.session import TuningRequest, TuningSession
+
+    cfg = get_preset(args.engine)
+    cal = import_json(Path(args.calibration).read_text()) if args.calibration else build_baseline(cfg)
+    req = TuningRequest(goal=args.goal, budget=args.budget, fidelity=args.fidelity,
+                        validation_fidelity=args.validation, actions=args.action or None, learn=not args.no_learn,
+                        validate=not args.no_validate)
+    kb = _knowledge(args)
+    print(f"SIMULATED tuning session — {cfg.name} — goal {args.goal} — knowledge base: {kb.trial_count()} experiments")
+    t0 = time.time()
+    report = TuningSession(cfg, cal, req, kb, progress=_progress if args.verbose else None).run()
+    s = report["summary"]
+    print(f"Done in {time.time() - t0:.0f} s. Stop reason: {report['stop_reason']}")
+    for f in report["diagnosis"]:
+        print(f"  diagnosis: {f['finding']} → {f['implication']}")
+    for st in report["steps"]:
+        pred = st["predicted"]["objective"] if st["predicted"] else None
+        flag = "accepted" if st["accepted"] else ("FAILED: " + "; ".join(st["reasons"][:1]) if not st["passed"]
+                                                  else "rejected")
+        print(f"  [{st['index']:2d}] {st['phase']:10s} {st['description'][:64]:64s} objective {st['objective']:+.3f}"
+              f"{f' (predicted {pred[0]:+.3f} ± {pred[1]:.3f})' if pred else ''}  {flag}")
+    print(f"Evaluations: {s['evaluations']} — probes skipped thanks to earlier knowledge: {s['probes_skipped']}")
+    print(f"Mistakes: {s['mistakes']} (constraint surprises {s['constraint_surprises']})")
+    print(f"Validated on the '{req.validation_fidelity}' battery: {s['validated']}"
+          + (f" (objective {s['objective_validated']:+.3f})" if s["validated"] else ""))
+    print("Recommended changes: " + ("; ".join(s["changes"]) or "none (baseline kept)"))
+    print("Change vs baseline (search battery): " + ", ".join(f"{k} {v:+.2f} %" for k, v in s["metrics_pct"].items()))
+    print("ready_for_vehicle: False — " + report["disclaimer"][1])
+    if args.out:
+        out = Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"tuning_{report['id']}.json").write_text(json.dumps(report, indent=1))
+        print(f"Report written to {out / ('tuning_' + report['id'] + '.json')}")
+    return 0
+
+
+def cmd_train(args) -> int:
+    from opentune.lab.tuning.benchmark import train
+
+    kb = _knowledge(args)
+    print(f"Training the tuning engine on the curriculum (nominal presets) — {kb.trial_count()} experiments so far")
+    res = train(kb, args.rounds, progress=_progress)
+    for r, agg in res["aggregate_by_round"].items():
+        print(f"  round {r}: {json.dumps(agg)}")
+    print(f"Knowledge base now holds {res['trials_after']} simulated experiments.")
+    return 0
+
+
+def cmd_benchmark(args) -> int:
+    from opentune.lab.tuning.benchmark import run_benchmark
+
+    kb = _knowledge(args)
+    res = run_benchmark(kb, args.suite, args.learn, progress=_progress)
+    for r in res["results"]:
+        t = r["task"]
+        print(f"  {t['engine_key']:28s} {t['goal']:16s} validated gain {r['validated_gain']:+.3f}  evaluations "
+              f"{r['evaluations']:3d}  surprises {r['constraint_surprises']}  validation failures "
+              f"{r['validation_failures']}  2σ coverage {r['coverage_2sigma']}")
+    print("Aggregate: " + json.dumps(res["aggregate"]))
+    print(res["note"])
+    return 0
+
+
 def cmd_selftest(args) -> int:
     import tempfile
 
@@ -146,6 +228,16 @@ def cmd_selftest(args) -> int:
         run = run_dyno(cfg, cal, DynoTest(rpm_start=2000, rpm_end=4500, ramp_rpm_s=600, settle_s=1.0)).runs[0]
         check(f"{pid}: dyno sweep", run.summary["peak_torque_nm"] > 100, f"{run.summary['peak_torque_nm']} N·m")
         check(f"{pid}: no DTCs on a healthy sweep", not run.events["dtcs"], ",".join(run.events["dtcs"]))
+    from opentune.lab.tuning.actions import apply_offsets
+    from opentune.lab.tuning.evaluator import BatteryConfig, evaluate, judge
+
+    cfg = get_preset("b48-inspired")
+    cal = build_baseline(cfg)
+    battery = BatteryConfig("selftest", 2500.0, 500.0, 900.0, ("nominal",), (), False, 1)
+    base = evaluate(cfg, cal, battery)
+    check("tuning evaluator: baseline within modelled limits", not base.violations, "; ".join(base.violations))
+    hot = evaluate(cfg, apply_offsets(cal, {"spark.mid": 3.0, "spark.high": 3.0, "torque.high": 15.0}), battery)
+    check("tuning evaluator rejects an aggressive calibration", not judge(hot, base).passed)
     try:
         import warnings
 
@@ -198,6 +290,30 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--uncertainty", type=int, default=0, help="Monte Carlo samples (0 = off)")
     d.add_argument("--out", help="directory for CSV/JSON results")
     d.set_defaults(func=cmd_dyno)
+    t = sub.add_parser("tune", help="run a simulated tuning session (recommendation only, never for a vehicle)")
+    t.add_argument("--engine", default="b58-inspired")
+    t.add_argument("--calibration", help="starting calibration JSON (default: synthetic baseline)")
+    t.add_argument("--goal", default="max_power",
+                   choices=("max_power", "power_band", "midrange_torque", "efficiency", "balanced"))
+    t.add_argument("--budget", type=int, default=12, help="search evaluations")
+    t.add_argument("--fidelity", default="quick", choices=("quick", "standard", "thorough"))
+    t.add_argument("--validation", default="standard", choices=("quick", "standard", "thorough"))
+    t.add_argument("--action", action="append", help="restrict to these actions (repeatable)")
+    t.add_argument("--no-learn", action="store_true", help="do not store the experiments")
+    t.add_argument("--no-validate", action="store_true")
+    t.add_argument("--data-dir")
+    t.add_argument("--out", help="directory for the JSON report")
+    t.add_argument("--verbose", action="store_true")
+    t.set_defaults(func=cmd_tune)
+    tr = sub.add_parser("train", help="grow the tuning knowledge base with the training curriculum")
+    tr.add_argument("--rounds", type=int, default=1)
+    tr.add_argument("--data-dir")
+    tr.set_defaults(func=cmd_train)
+    b = sub.add_parser("benchmark", help="score the tuning engine on a fixed task suite")
+    b.add_argument("--suite", default="quick", choices=("smoke", "quick", "standard"))
+    b.add_argument("--learn", action="store_true", help="also store the benchmark's experiments")
+    b.add_argument("--data-dir")
+    b.set_defaults(func=cmd_benchmark)
     sub.add_parser("selftest", help="end-to-end check").set_defaults(func=cmd_selftest)
     return p
 

@@ -15,6 +15,11 @@
     A–G, illustrative sound
   * M7 optional integrations (rusEFI simulator read-only client, engine-sim adapter, MATLAB
     export), Docker, CI, documentation
+  * **Tuning engine** — the purpose of the lab: test battery with mechanical/thermal stress
+    limits and perturbed-model corners, bounded calibration actions, Bayesian response surfaces
+    with caution factors, repair of unsafe starting calibrations, trust-region search with a
+    safety screen, validation gate, experience store, benchmark with held-out engines, training
+    curriculum, UI/CLI/API ([TUNING_ENGINE.md](TUNING_ENGINE.md))
 
 ## Next milestone (proposed): M8 — measured data and model identification
 
@@ -31,6 +36,13 @@ The single most valuable step is replacing assumptions with measurements:
 
 Good first data source: the user's own read-only OBD-II logs from v0.1 (speed, load, MAP,
 IAT, timing, lambda) — limited, but real.
+
+For the tuning engine this means: measured experiments enter the knowledge base labelled
+`measured` with their own noise model, update the response surfaces and the caution factors, and
+shrink the uncertainty the safety screen uses. Next tuning-engine steps: interaction terms in the
+response model, transient (tip-in) goals, per-condition stress limits from component data, and a
+"what would I need to measure?" report that ranks the model assumptions by how much they limit
+the recommendation.
 
 ## Later
 

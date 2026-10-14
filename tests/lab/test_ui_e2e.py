@@ -51,7 +51,7 @@ def server(tmp_path_factory):
 PAGES = [("dashboard", "Workflow (10 steps)"), ("engine", "Steady-state full-load preview"),
          ("tuning", "Base ignition timing"), ("dyno", "Run test"), ("control", "PID loop lab"),
          ("diagnostics", "No live session"), ("ai", "Ask the analyst"), ("tests", "Interrupted ECU update"),
-         ("library", "New project")]
+         ("tuner", "Start tuning session"), ("library", "New project")]
 
 
 def test_every_page_renders_without_console_errors(server):
@@ -69,6 +69,12 @@ def test_every_page_renders_without_console_errors(server):
             page.goto(f"{server}/#/{path}")
             page.get_by_text(text).first.wait_for(timeout=20000)
         assert "Real ECU writes" in page.content()
+        # tuning engine tabs: knowledge and benchmark views render (empty knowledge base)
+        page.goto(f"{server}/#/tuner")
+        page.get_by_role("button", name="What it has learned").click()
+        page.get_by_text("Learned sensitivities").first.wait_for(timeout=20000)
+        page.get_by_role("button", name="Benchmark & training").click()
+        page.get_by_text("held-out engines").first.wait_for(timeout=20000)
         # a small interaction: start the live engine and see frames arrive
         page.goto(f"{server}/#/dashboard")
         page.get_by_role("button", name="Start session").click()

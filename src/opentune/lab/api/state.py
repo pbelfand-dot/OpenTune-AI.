@@ -20,6 +20,17 @@ class LabState:
         self.lock = threading.RLock()
         self._editors: dict[str, tuple[CalibrationEditor, str]] = {}
         self.live: LiveSession | None = None
+        self._knowledge = None
+
+    @property
+    def knowledge(self):
+        """Tuning-engine knowledge base (experiments, mistakes, benchmarks), opened on first use."""
+        with self.lock:
+            if self._knowledge is None:
+                from opentune.lab.tuning.knowledge import KnowledgeBase
+
+                self._knowledge = KnowledgeBase(self.root / "tuning.sqlite")
+            return self._knowledge
 
     # ------------------------------------------------------------------ calibration working copies
     def editor(self, project_id: str) -> CalibrationEditor:
@@ -119,3 +130,5 @@ class LabState:
     def shutdown(self) -> None:
         self.replace_live(None)
         self.jobs.shutdown()
+        if self._knowledge is not None:
+            self._knowledge.close()

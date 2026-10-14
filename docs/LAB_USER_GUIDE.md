@@ -30,9 +30,9 @@ docker build -t opentune-lab .
 docker run --rm -p 127.0.0.1:8765:8765 -v opentune-data:/data opentune-lab
 ```
 
-## The 10-step workflow
+## The workflow
 
-The Dashboard shows these steps with a tick when done.
+The Dashboard shows steps 1–10 with a tick when done.
 
 1. **Project.** In *Project Library*, create a project from a preset. The B48-inspired preset
    suits a G20 330i-class engine; the B58-inspired one an M340i-class engine. A synthetic
@@ -69,6 +69,9 @@ The Dashboard shows these steps with a tick when done.
 10. **Analysis.** *AI Engineer* turns runs and calibration changes into findings, each tagged
     with its evidence category. A local model (optional) can add a narrative, always labelled
     speculative.
+11. **Tuning engine.** *Tuning Engine* runs the automated loop: diagnose, experiment, predict,
+    test against performance, efficiency and stress limits, learn, validate. Its recommendation
+    can be applied to the working copy for the steps above — it is never a vehicle calibration.
 
 ## How to …
 
@@ -87,6 +90,12 @@ identify a first-order-plus-dead-time model and get SIMC suggestions; try them w
 `boost_step`; compare IAE/overshoot against the baseline gains; write the better gains to
 the working copy. Note: the wastegate feed-forward table does most of the work during
 spool-up, so a small-signal suggestion can be worse for large steps — that is a real result.
+
+### …let the tuning engine work on a calibration
+*Tuning Engine*: pick a goal and a budget, start a session. Read the diagnosis (what limits the
+calibration), then every experiment (predicted vs measured) and the stress margins. If the result
+validated, *Apply to working copy* and verify it on the dyno and with scenarios C and D. *Benchmark
+& training* shows whether the tuner is improving. See [TUNING_ENGINE.md](TUNING_ENGINE.md).
 
 ### …use the optimiser responsibly
 Run it, read which constraints are active and the robustness column, apply the candidate to
@@ -116,6 +125,7 @@ See [LAB_INTEGRATIONS.md](LAB_INTEGRATIONS.md).
 
 ## Where data lives
 
-`<data dir>/lab/`: `lab.sqlite` (projects, versions, runs, reports), `ecu/` (virtual ECU
-memory and backups), `ai_settings.json`. Data dir: `$OPENTUNE_DATA_DIR`, or
+`<data dir>/lab/`: `lab.sqlite` (projects, versions, runs, reports), `tuning.sqlite` (tuning
+sessions, experiments, mistakes, benchmarks), `ecu/` (virtual ECU memory and backups),
+`ai_settings.json`. Data dir: `$OPENTUNE_DATA_DIR`, or
 `~/Library/Application Support/OpenTune AI` on macOS.

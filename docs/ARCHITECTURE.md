@@ -6,7 +6,8 @@ OpenTune AI has two parts that share one Python package:
    arcade-grade simulator, calibration library, desktop GUI (PySide6). See the README.
 2. **Virtual Engine Lab** (`opentune.lab`, v0.2): a simulation-only engineering laboratory —
    physics engine model, virtual ECU, calibration suite, virtual dyno, simulated flashing,
-   control/optimisation tools, AI analyst and a browser UI.
+   control/optimisation tools, AI analyst and a browser UI. Its purpose is to be the training and
+   test ground of the **tuning engine** (`lab/tuning/`, see [TUNING_ENGINE.md](TUNING_ENGINE.md)).
 
 The lab can **not** reach vehicle hardware. There is no serial/CAN/USB/J2534 code in it,
 its only "ECU" is an in-process object, and automated tests enforce both
@@ -19,6 +20,9 @@ its only "ECU" is an in-process object, and automated tests enforce both
         │  REST + WebSocket (127.0.0.1 only by default)
  FastAPI app  opentune.lab.api        app.py · state.py · jobs.py · live.py · routes/*
         │
+ tuning/       tuning engine: battery + scorecard (evaluator), actions, response model + experience
+               store (knowledge), session loop (repair, search, validation), benchmark/training
+        │      uses dyno.run_dyno for every experiment (parallel worker processes)
  Lab services ──────────────────────────────────────────────────────────────────────────
   dyno/         virtual dyno: sweeps, steady, transient, repeat, corrections, uncertainty
   control/      PID loop lab, SIMC tuning, identification, engine-in-the-loop experiments
@@ -61,8 +65,10 @@ Frame = plant + ECU + sensors ─► dyno channels / live WebSocket frames / sce
 * **Simulated flashing** turns a saved calibration into an OTCI image, writes it to the
   project's `VirtualEcuDevice` through the OTVL loopback link, and the live session then
   runs exactly what the device's running bank holds.
-* **Jobs** (dyno, uncertainty, flash, control, optimisation, scenarios) run on a thread
-  pool with progress and cancel; results are stored in the project library.
+* **Jobs** (dyno, uncertainty, flash, control, optimisation, scenarios, tuning, benchmark,
+  training) run on a thread pool with progress and cancel; results are stored in the project
+  library or the tuning knowledge base. A tuning evaluation fans its battery out to up to four
+  worker processes ("spawn" start method, safe in the threaded server).
 
 ## Persistence
 
@@ -73,6 +79,7 @@ Frame = plant + ECU + sensors ─► dyno channels / live WebSocket frames / sce
 | `lab.sqlite` | projects, calibration versions (lineage, baseline, hash), dyno runs, reports |
 | `ecu/<project>.json` | virtual ECU memory (banks, boot control block, logs) |
 | `ecu/backups/<project>/*.otci` | read-back backups taken before every flash |
+| `tuning.sqlite` | tuning sessions and reports, every experiment (offsets, effects, predictions), mistakes, benchmark history |
 | `ai_settings.json` | optional local-model settings |
 
 ## Threads and timing
@@ -97,3 +104,4 @@ Frame = plant + ECU + sensors ─► dyno channels / live WebSocket frames / sce
 | API route | `api/routes/*.py`, register in `api/app.py` or `routes/extra.py` | |
 | UI page | `web/src/pages/*.tsx`, add to `App.tsx` | rebuild: `cd web && npm run build` |
 | Integration | `integrations/*.py` | must report unavailability, never fake results |
+| Tuning action / goal / limit | `tuning/actions.py`, `tuning/evaluator.py` | bounded, explainable; prove no new constraint surprises on the benchmark |

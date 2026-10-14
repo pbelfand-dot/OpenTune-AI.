@@ -50,6 +50,7 @@ opentune-lab serve --open        # http://127.0.0.1:8765 (local only)
 | **Engine Diagnostics** | Inject sensor faults, see DTCs, freeze frames, limp modes and sensor voltages |
 | **AI Engineer** | Evidence-tagged findings; optional local LLM (localhost only) |
 | **Test Laboratory** | Scenarios A–G: stock, moderate, aggressive, heat stress, sensor failures, interrupted ECU update, repeatability |
+| **Tuning Engine** | The reason the lab exists: an engine that experiments with calibration changes on the simulator, predicts their effect with error bars, tests them against performance, efficiency and mechanical-stress limits (including deliberately wrong engine models), repairs unsafe starting calibrations, learns from every result and mistake, and is benchmarked on held-out engines |
 | **Project Library** | Projects, calibration lineage, dyno runs and reports in one local SQLite file |
 
 <p>
@@ -57,7 +58,21 @@ opentune-lab serve --open        # http://127.0.0.1:8765 (local only)
 <img src="docs/images/lab/04_dyno.png" width="49%" alt="Virtual dyno" />
 <img src="docs/images/lab/07_flash.png" width="49%" alt="Simulated flash log" />
 <img src="docs/images/lab/05b_optimise.png" width="49%" alt="Optimiser with validation gate" />
+<img src="docs/images/lab/09b_tuning_report.png" width="49%" alt="Tuning engine session report" />
+<img src="docs/images/lab/09c_tuning_knowledge.png" width="49%" alt="What the tuning engine has learned" />
 </p>
+
+**Purpose.** The simulator is the training and test ground for OpenTune's tuning engine — not a
+game. The [tuning engine](docs/TUNING_ENGINE.md) runs a diagnose → probe → propose → predict →
+test → accept/reject → learn → validate loop, keeps every experiment in a local knowledge base, and
+gets measurably better with experience (fewer simulations, honest error bars, no constraint
+surprises on the benchmark). Simulated results are never treated as proof that a calibration is
+safe for a real vehicle.
+
+```bash
+opentune-lab tune --engine b48-inspired --goal midrange_torque --budget 12
+opentune-lab train --rounds 1 && opentune-lab benchmark --suite quick
+```
 
 Headless: `opentune-lab selftest`, `opentune-lab dyno --engine b48-inspired --kind sweep --out results/`,
 Docker: `docker build -t opentune-lab . && docker run -p 127.0.0.1:8765:8765 opentune-lab`.
@@ -68,7 +83,7 @@ synthetic tables for a fictional virtual ECU, not extracted from any DME. Nothin
 produces is a calibration for a vehicle. Details: [User guide](docs/LAB_USER_GUIDE.md) ·
 [Architecture](docs/ARCHITECTURE.md) · [Simulation models](docs/SIMULATION_MODELS.md) ·
 [Model assumptions](docs/MODEL_ASSUMPTIONS.md) · [Validation](docs/VALIDATION.md) ·
-[Integrations (rusEFI, engine-sim, MATLAB)](docs/LAB_INTEGRATIONS.md) ·
+[Tuning engine](docs/TUNING_ENGINE.md) · [Integrations (rusEFI, engine-sim, MATLAB)](docs/LAB_INTEGRATIONS.md) ·
 [Licensing](docs/LICENSING.md) · [Roadmap](docs/ROADMAP.md).
 
 ## Quick start (macOS)

@@ -9,6 +9,7 @@ import Diagnostics from "./pages/Diagnostics";
 import AiEngineer from "./pages/AiEngineer";
 import TestLab from "./pages/TestLab";
 import Library from "./pages/Library";
+import TuningEngine from "./pages/TuningEngine";
 
 const PAGES: { id: string; label: string; ico: string; el: ComponentType }[] = [
   { id: "dashboard", label: "Dashboard", ico: "◉", el: Dashboard },
@@ -19,6 +20,7 @@ const PAGES: { id: string; label: string; ico: string; el: ComponentType }[] = [
   { id: "diagnostics", label: "Engine Diagnostics", ico: "⚠", el: Diagnostics },
   { id: "ai", label: "AI Engineer", ico: "✦", el: AiEngineer },
   { id: "tests", label: "Test Laboratory", ico: "⚗", el: TestLab },
+  { id: "tuner", label: "Tuning Engine", ico: "⟳", el: TuningEngine },
   { id: "library", label: "Project Library", ico: "▤", el: Library },
 ];
 
