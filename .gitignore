@@ -5,6 +5,8 @@ __pycache__/
 .eggs/
 build/
 dist/
+# The lab's built browser UI is committed so `pip install` works without Node.js.
+!src/opentune/lab/web/dist/
 *.egg
 
 # Virtual environments

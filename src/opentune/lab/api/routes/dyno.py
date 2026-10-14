@@ -62,6 +62,17 @@ def load_calibration(request: Request, project_id: str, src: CalibrationSource):
     return st.library.load_calibration(project_id, src.source, src.version_id)
 
 
+def describe_source(request: Request, project_id: str, src: CalibrationSource, cal) -> str:
+    """Short human label such as 'v3 (flashed)' or 'working copy of v2 (edited)'."""
+    st = state(request)
+    if src.source == "working":
+        base = st.library.calibrations.info(st.editor_version(project_id))
+        return f"working copy of v{base.version}" + (" (edited)" if st.is_dirty(project_id) else "")
+    vid = st.version_for_hash(project_id, cal.content_hash())
+    info = st.library.calibrations.info(vid) if vid else None
+    return (f"v{info.version}" if info else "unsaved") + f" ({src.source})"
+
+
 @router.get("/api/dyno/meta")
 def meta() -> dict:
     return {"kinds": list(TEST_KINDS), "channels": channel_list(),
@@ -82,6 +93,8 @@ def start_run(request: Request, body: DynoJobBody) -> dict:
     if problems:
         raise HTTPException(400, "; ".join(problems))
     source = body.calibration.source
+    if not test.label:
+        test.label = f"{test.kind} — {describe_source(request, body.project_id, body.calibration, cal)}"
 
     def job(progress, cancel):
         result = run_dyno(cfg, cal, test, progress, cancel)

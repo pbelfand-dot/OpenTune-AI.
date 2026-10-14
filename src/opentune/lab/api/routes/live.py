@@ -183,7 +183,7 @@ async def ws_live(ws: WebSocket) -> None:
                 session, queue = st.live, None
                 if session is not None:
                     queue = session.subscribe(loop)
-                    await ws.send_json(jsonable({"type": "status", **session.status()}))
+                    await ws.send_json(jsonable({"type": "status", "running": True, **session.status()}))
                 else:
                     await ws.send_json({"type": "status", "running": False})
             if queue is None:

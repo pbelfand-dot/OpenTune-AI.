@@ -195,7 +195,7 @@ def test_websocket_streams_frames(client, pid):
     client.post("/api/live/start", json={"project_id": pid, "speed": 2.0})
     with client.websocket_connect("/ws/live") as ws:
         first = ws.receive_json()
-        assert first["type"] == "status"
+        assert first["type"] == "status" and first["running"] is True and first["project_id"] == pid
         kinds = set()
         for _ in range(10):
             msg = ws.receive_json()
